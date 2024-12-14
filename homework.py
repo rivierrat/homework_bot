@@ -1,8 +1,7 @@
-import json
 import logging
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from http import HTTPStatus
 
 import requests
@@ -85,9 +84,9 @@ def get_api_answer(timestamp):
         'headers': HEADERS,
         'params': {'from_date': timestamp}
     }
-    params_msg = (f'Эндпоинт: {request_params["url"]}'
-                  f'Авторизация: {request_params["headers"]["Authorization"]}'
-                  f'Метка времени: {request_params["params"]["from_date"]}')
+    params_msg = (f'Эндпоинт: {request_params["url"]} '
+                  f'Авторизация: {request_params["headers"]["Authorization"]} '
+                  f'Метка времени: {request_params["params"]["from_date"]} ')
 
     logger.debug(f'Отправляем запрос со следующими параметрами: {params_msg}')
     try:
@@ -143,7 +142,7 @@ def main():
     """Основная логика работы бота."""
     check_tokens()
     bot = TeleBot(token=TELEGRAM_TOKEN)
-    timestamp = 0
+    timestamp = int(time.time())
     send_message(bot, (f'{datetime.now().strftime("%d.%m.%y %H:%M")}: '
                        'Начали отслеживать статус домашки.'))
     prev_status = ''
@@ -163,7 +162,6 @@ def main():
                     continue
             logger.info('Статус домашки не изменился, повторный запрос через '
                         f'{RETRY_PERIOD} с.')
-            time.sleep(RETRY_PERIOD)
         except Exception as error:
             prev_err_msg = ''
             err_msg = f'Сбой в работе программы: {error}'
