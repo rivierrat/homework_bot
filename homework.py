@@ -83,8 +83,7 @@ def get_api_answer(timestamp):
         'params': {'from_date': timestamp}
     }
     params_msg = (
-        'Эндпоинт: {url}, Авторизация: {headers}, Метка времени: {params}'
-        .format(**request_params)
+        'Эндпоинт: {url}, {headers}, {params}'.format(**request_params)
     )
     logger.debug(f'Отправляем запрос со следующими параметрами: {params_msg}')
     try:
