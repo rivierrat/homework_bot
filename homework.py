@@ -8,7 +8,7 @@ import requests
 from dotenv import load_dotenv
 from telebot import TeleBot
 
-from exceptions import HomeworkError, ResponseStatusNotOK, TokenCheckError
+from exceptions import ResponseStatusNotOK, TokenCheckError
 
 os.environ.clear()
 load_dotenv()
@@ -47,14 +47,12 @@ def check_tokens():
         ('TELEGRAM_TOKEN', TELEGRAM_TOKEN,),
         ('TELEGRAM_CHAT_ID', TELEGRAM_CHAT_ID,),
     ):
-        if value is None:
+        if not value:
             lost_tokens.append(name)
             logger.critical(f'Не найдена переменная окружения: {name}')
-        if lost_tokens:
-            raise TokenCheckError(
-                'Не найдены необходимые переменные окружения: '
-                f'{", ".join(lost_tokens)}'
-            )
+    if lost_tokens:
+        raise TokenCheckError('Не найдены необходимые переменные окружения: '
+                              f'{", ".join(lost_tokens)}')
 
 
 def send_message(bot, message):
@@ -84,15 +82,13 @@ def get_api_answer(timestamp):
         'headers': HEADERS,
         'params': {'from_date': timestamp}
     }
-    params_msg = (f'Эндпоинт: {request_params["url"]} '
-                  f'Авторизация: {request_params["headers"]["Authorization"]} '
-                  f'Метка времени: {request_params["params"]["from_date"]} ')
-
+    params_msg = (
+        'Эндпоинт: {url}, Авторизация: {headers}, Метка времени: {params}'
+        .format(**request_params)
+    )
     logger.debug(f'Отправляем запрос со следующими параметрами: {params_msg}')
     try:
-        response = requests.get(request_params["url"],
-                                headers=request_params["headers"],
-                                params=request_params["params"])
+        response = requests.get(**request_params)
     except requests.exceptions.RequestException as request_error:
         raise ConnectionError(
             'Ошибка запроса. Запрос с параметрами: '
@@ -113,11 +109,12 @@ def check_response(response):
                         f'{response.__class__.__name__}')
     if 'homeworks' not in response:
         raise TypeError('В ответе сервера не найден ключ "homeworks"')
-    if not isinstance(response['homeworks'], list):
+    homeworks = response['homeworks']
+    if not isinstance(homeworks, list):
         raise TypeError('В ответет сервера под ключом "homeworks" ожидали'
                         'list, а получили '
-                        f'{response["homeworks"].__class__.__name__}!')
-    return response['homeworks']
+                        f'{homeworks.__class__.__name__}!')
+    return homeworks
 
 
 def parse_status(homework):
@@ -127,13 +124,13 @@ def parse_status(homework):
     возвращает строку, содержащую один из вердиктов словаря HOMEWORK_VERDICTS.
     """
     if 'homework_name' not in homework:
-        raise HomeworkError('Ключ "homework_name" не найден в ответе API')
+        raise KeyError('Ключ "homework_name" не найден в ответе API')
     homework_name = homework['homework_name']
     homework_status = homework['status']
     if homework_status not in HOMEWORK_VERDICTS:
-        raise HomeworkError(f'Полученный статус домашки "{homework_status}" '
-                            'не соответствует ни одному из ожидаемых: '
-                            f'{"|".join(HOMEWORK_VERDICTS.keys())}')
+        raise ValueError(f'Полученный статус домашки "{homework_status}" '
+                         'не соответствует ни одному из ожидаемых: '
+                         f'{"|".join(HOMEWORK_VERDICTS.keys())}')
     return (f'Изменился статус проверки работы "{homework_name}". '
             f'{HOMEWORK_VERDICTS[homework_status]}')
 
@@ -150,25 +147,20 @@ def main():
         try:
             response = get_api_answer(timestamp)
             homeworks = check_response(response)
-            if homeworks == []:
+            if not homeworks:
                 logger.debug('В ответе сервера нет ни одной домашки.')
                 continue
             homework = homeworks[0]
             verdict = parse_status(homework)
-            if homework['status'] != prev_status:
-                if send_message(bot, verdict):
-                    prev_status = homework['status']
-                    timestamp = response.get('current_date')
-                    continue
-            logger.info('Статус домашки не изменился, повторный запрос через '
-                        f'{RETRY_PERIOD} с.')
+            if (homework['status'] != prev_status
+               and send_message(bot, verdict)):
+                prev_status = homework['status']
+                timestamp = response.get('current_date', int(time.time()))
         except Exception as error:
-            prev_err_msg = ''
             err_msg = f'Сбой в работе программы: {error}'
-            logger.error(err_msg)
-            if err_msg != prev_err_msg:
-                if send_message(bot, err_msg):
-                    prev_err_msg = err_msg
+            logger.error(err_msg, exc_info=True)
+            if err_msg != prev_status and send_message(bot, err_msg):
+                prev_status = err_msg
         finally:
             time.sleep(RETRY_PERIOD)
 
