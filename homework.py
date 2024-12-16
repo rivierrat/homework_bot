@@ -154,7 +154,7 @@ def main():
             if (homework['status'] != prev_status
                and send_message(bot, verdict)):
                 prev_status = homework['status']
-                timestamp = response.get('current_date', int(time.time()))
+                timestamp = response.get('current_date', timestamp)
         except Exception as error:
             err_msg = f'Сбой в работе программы: {error}'
             logger.error(err_msg, exc_info=True)
